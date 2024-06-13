@@ -10,16 +10,28 @@ wss.on('connection', function connection(ws) {
     const mess = JSON.parse(message)
     const separatorIndex = mess.indexOf(':');
     if (message.includes('Ник:')) {
-      const nickname = mess.slice(separatorIndex + 1);
-      if (onlineClients.has(nickname)) {
-        ws.send('Такой псевдоним уже занят.');
+      let nickname = mess.slice(separatorIndex + 1);
+      console.dir(nickname);
+      if (onlineClients.size !== 0) {
+        onlineClients.forEach((value, key, map) => {
+          if (nickname === value) {
+            nickname = 0
+          };
+        });
+
+        if (nickname === 0) {
+          ws.send('Такой псевдоним уже занят.');
+        } else {
+          onlineClients.set(ws, nickname);
+        };
+        
       } else {
         onlineClients.set(ws, nickname); 
-      }
+      };
     } else {
       const nickname = mess.slice(0, separatorIndex);
       const clientMessage = mess.slice(separatorIndex + 1);
-      wss.clients.forEach(function each(client) { 
+      wss.clients.forEach((client) => { 
         client.send(`${nickname}: ${clientMessage}`);
       });
     }
@@ -28,7 +40,7 @@ wss.on('connection', function connection(ws) {
   ws.on('close', function () {
     for (let currentClient of onlineClients.keys()) {
       if (currentClient === ws) {
-        wss.clients.forEach(function each(client) {
+        wss.clients.forEach((client) => {
           client.send(`${onlineClients.get(currentClient)} покинул чат.`);
         });
         onlineClients.delete(currentClient);
@@ -38,7 +50,7 @@ wss.on('connection', function connection(ws) {
   });
 
 setInterval(() => {
-  wss.clients.forEach(function each(client) { 
+  wss.clients.forEach((client) => { 
     const sendClients = [...onlineClients.values()].join(', ');
     client.send(`Онлайн: ${sendClients}`);
   });
