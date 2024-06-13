@@ -1,93 +1,55 @@
-import http from "http";
-import express from "express";
-import WebSocket, { WebSocketServer } from "ws";
-import cors from "cors";
-import bodyParser from "body-parser";
-import * as crypto from "crypto";
+const WebSocket = require('ws');
 
-const app = express();
+const wss = new WebSocket.Server({ port: 7070 });
+const onlineClients = new Map();
 
-app.use(cors());
-app.use(
-  bodyParser.json({
-    type(req) {
-      return true;
-    },
-  })
-);
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json");
-  next();
-});
+wss.on('connection', function connection(ws) {
 
-const userState = [];
-app.post("/new-user", async (request, response) => {
-  if (Object.keys(request.body).length === 0) {
-    const result = {
-      status: "error",
-      message: "This name is already taken!",
-    };
-    response.status(400).send(JSON.stringify(result)).end();
-  }
-  const { name } = request.body;
-  const isExist = userState.find((user) => user.name === name);
-  if (!isExist) {
-    const newUser = {
-      id: crypto.randomUUID(),
-      name: name,
-    };
-    userState.push(newUser);
-    const result = {
-      status: "ok",
-      user: newUser,
-    };
-    response.send(JSON.stringify(result)).end();
-  } else {
-    const result = {
-      status: "error",
-      message: "This name is already taken!",
-    };
-    response.status(409).send(JSON.stringify(result)).end();
-  }
-});
+  ws.on('message', function incoming(message) {
 
-const server = http.createServer(app);
-const wsServer = new WebSocketServer({ server });
-wsServer.on("connection", (ws) => {
-  ws.on("message", (msg, isBinary) => {
-    const receivedMSG = JSON.parse(msg);
-    console.dir(receivedMSG);
-    if (receivedMSG.type === "exit") {
-      const idx = userState.findIndex(
-        (user) => user.name === receivedMSG.user.name
-      );
-      userState.splice(idx, 1);
-      [...wsServer.clients]
-        .filter((o) => o.readyState === WebSocket.OPEN)
-        .forEach((o) => o.send(JSON.stringify(userState)));
-      return;
-    }
-    if (receivedMSG.type === "send") {
-      [...wsServer.clients]
-        .filter((o) => o.readyState === WebSocket.OPEN)
-        .forEach((o) => o.send(msg, { binary: isBinary }));
+    const mess = JSON.parse(message)
+    const separatorIndex = mess.indexOf(':');
+    if (message.includes('Ник:')) {
+      const nickname = mess.slice(separatorIndex + 1);
+      if (onlineClients.has(nickname)) {
+        ws.send('Такой псевдоним уже занят.');
+      } else {
+        onlineClients.set(ws, nickname); 
+      }
+    } else {
+      const nickname = mess.slice(0, separatorIndex);
+      const clientMessage = mess.slice(separatorIndex + 1);
+      wss.clients.forEach(function each(client) { 
+        client.send(`${nickname}: ${clientMessage}`);
+      });
     }
   });
-  [...wsServer.clients]
-    .filter((o) => o.readyState === WebSocket.OPEN)
-    .forEach((o) => o.send(JSON.stringify(userState)));
+
+  ws.on('close', function () {
+    for (let currentClient of onlineClients.keys()) {
+      if (currentClient === ws) {
+        wss.clients.forEach(function each(client) {
+          client.send(`${onlineClients.get(currentClient)} покинул чат.`);
+        });
+        onlineClients.delete(currentClient);
+        return;
+      }
+    };
+  });
+
+setInterval(() => {
+  wss.clients.forEach(function each(client) { 
+    const sendClients = [...onlineClients.values()].join(', ');
+    client.send(`Онлайн: ${sendClients}`);
+  });
+},5000)
+
 });
 
-const port = process.env.PORT || 3000;
-
 const bootstrap = async () => {
-  try {
-    server.listen(port, () =>
-      console.log(`Server has been started on http://localhost:${port}`)
-    );
-  } catch (error) {
-    console.error(error);
-  }
+    console.log(`Server has been started on http://localhost:7070`)
 };
-
+  
 bootstrap();
+
+
