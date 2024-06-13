@@ -11,7 +11,6 @@ wss.on('connection', function connection(ws) {
     const separatorIndex = mess.indexOf(':');
     if (message.includes('Ник:')) {
       let nickname = mess.slice(separatorIndex + 1);
-      console.dir(nickname);
       if (onlineClients.size !== 0) {
         onlineClients.forEach((value, key, map) => {
           if (nickname === value) {
@@ -28,6 +27,11 @@ wss.on('connection', function connection(ws) {
       } else {
         onlineClients.set(ws, nickname); 
       };
+    } else if(message.includes('Подключение')) {
+      wss.clients.forEach((client) => { 
+        const sendClients = [...onlineClients.values()].join(', ');
+        client.send(`Онлайн:${sendClients}`);
+      });
     } else {
       const nickname = mess.slice(0, separatorIndex);
       const clientMessage = mess.slice(separatorIndex + 1);
@@ -49,12 +53,12 @@ wss.on('connection', function connection(ws) {
     };
   });
 
-setInterval(() => {
-  wss.clients.forEach((client) => { 
-    const sendClients = [...onlineClients.values()].join(', ');
-    client.send(`Онлайн: ${sendClients}`);
-  });
-},5000)
+// setInterval(() => {
+//   wss.clients.forEach((client) => { 
+//     const sendClients = [...onlineClients.values()].join(', ');
+//     client.send(`Онлайн: ${sendClients}`);
+//   });
+// },5000)
 
 });
 
